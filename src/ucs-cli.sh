@@ -13,7 +13,6 @@ HOOK_HOLD_5S="/etc/ucs/hooks/ucs_hook_hold_5s.sh"
 HOOK_HOLD_10S="/etc/ucs/hooks/ucs_hook_hold_10s.sh"
 
 # Load Configuration
-ENABLE="true"
 LONG_PRESS_SEC=10
 if [ -f "$CONF_FILE" ]; then
   source "$CONF_FILE"
@@ -33,7 +32,6 @@ check_root() {
 }
 
 ucs_enable() {
-  sudo sed -i 's/^ENABLE=.*/ENABLE=true/' "$CONF_FILE"
   sudo systemctl enable "$SERVICE_NAME" >/dev/null 2>&1
   log_msg "INFO" "Service enabled for auto-start."
   log_msg "INFO" "Note: It is NOT started yet. Run 'ucs start' to run it."
@@ -42,33 +40,20 @@ ucs_enable() {
 ucs_disable() {
   sudo systemctl stop "$SERVICE_NAME" >/dev/null 2>&1
   sudo systemctl disable "$SERVICE_NAME" >/dev/null 2>&1
-  sudo sed -i 's/^ENABLE=.*/ENABLE=false/' "$CONF_FILE"
   log_msg "INFO" "Service disabled and stopped."
 }
 
 ucs_start() {
-  if [ "$ENABLE" != "true" ]; then
-    log_msg "ERROR" "Service is disabled. Run 'ucs enable' first."
-    exit 1
-  fi
   sudo systemctl start "$SERVICE_NAME"
   log_msg "INFO" "Service started."
 }
 
 ucs_stop() {
-  if [ "$ENABLE" != "true" ]; then
-    log_msg "ERROR" "Service is disabled."
-    exit 1
-  fi
   sudo systemctl stop "$SERVICE_NAME"
   log_msg "INFO" "Service stopped."
 }
 
 ucs_restart() {
-  if [ "$ENABLE" != "true" ]; then
-    log_msg "ERROR" "Service is disabled. Run 'ucs enable' first."
-    exit 1
-  fi
   sudo systemctl restart "$SERVICE_NAME"
   log_msg "INFO" "Service restarted."
 }
@@ -85,7 +70,8 @@ ucs_set_time() {
   fi
   sudo sed -i "s/^LONG_PRESS_SEC=.*/LONG_PRESS_SEC=$new_time/" "$CONF_FILE"
   log_msg "INFO" "Long press time set to $new_time seconds."
-  if [ "$ENABLE" == "true" ]; then
+
+  if sudo systemctl is-active --quiet "$SERVICE_NAME"; then
     sudo systemctl restart "$SERVICE_NAME"
     log_msg "INFO" "Service restarted to apply new time."
   fi
@@ -193,12 +179,6 @@ ucs_monitor() {
   fi
   echo $$ > "$LOCK_FILE"
 
-  if [ "$ENABLE" != "true" ] && [ "$IS_DRY_RUN" = false ]; then
-    log_msg "INFO" "Service is disabled in config. Exiting."
-    rm -f "$LOCK_FILE"
-    exit 0
-  fi
-
   if [ "$IS_DRY_RUN" = true ]; then
     log_msg "WARN" "=== DRY RUN MODE ENABLED ==="
     log_msg "WARN" "System will NOT actually shut down."
@@ -259,14 +239,18 @@ ucs_monitor() {
       LAST_DOWN=$(date +%s.%N)
 
       (
+        log_msg "DEBUG" "[Timer] Waiting 2s for HOOK_HOLD_2S..."
         sleep 2
+        log_msg "DEBUG" "[Timer] 2s reached! Executing 2s hook."
         if [ "$IS_DRY_RUN" = true ]; then
           log_msg "WARN" "(DRY RUN) 2s hold hook triggered."
         else
           bash "$HOOK_HOLD_2S" &
         fi
 
+        log_msg "DEBUG" "[Timer] Waiting 3s for HOOK_HOLD_5S..."
         sleep 3
+        log_msg "DEBUG" "[Timer] 5s reached! Executing 5s hook."
         if [ "$IS_DRY_RUN" = true ]; then
           log_msg "WARN" "(DRY RUN) 5s hold hook triggered."
         else
@@ -274,13 +258,14 @@ ucs_monitor() {
         fi
 
         local remaining=$((LONG_PRESS_SEC - 5))
-        log_msg "INFO" "Waiting remaining $remaining seconds..."
+        log_msg "INFO" "[Timer] Waiting remaining $remaining seconds..."
         sleep $remaining
 
+        log_msg "DEBUG" "[Timer] ${LONG_PRESS_SEC}s reached!"
         if [ "$IS_DRY_RUN" = true ]; then
-          log_msg "WARN" "(DRY RUN) 10s reached. Mocking shutdown!"
+          log_msg "WARN" "(DRY RUN) Mocking shutdown!"
         else
-          log_msg "WARN" "10s reached. Triggering software shutdown hook!"
+          log_msg "WARN" "Triggering software shutdown hook!"
           bash "$HOOK_HOLD_10S" &
         fi
       ) &
