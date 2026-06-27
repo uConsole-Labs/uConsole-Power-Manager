@@ -1,0 +1,13 @@
+[Unit]
+Description=uConsole Power Key Monitor
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ucs monitor_power_key
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target

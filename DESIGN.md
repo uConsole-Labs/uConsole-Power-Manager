@@ -1,43 +1,299 @@
-# uConsole-shutdown Design & Architecture
+# uConsole-shutdown Design and Architecture
 
-## 1. 核心設計理念 (Core Design Philosophy)
-本專案的誕生是為了解決 ClockworkPi uConsole（特別是搭載 CM5 核心模組時）所遇
-到的長按電源鍵當機問題。設計上秉持「極輕量」、「零 CPU 佔用」以及「跨硬體自
-動適配」三大原則。
+[點擊此處跳轉至中文版說明](#中文版說明-traditional-chinese)
 
-## 2. 硬體架構差異與自動適配 (Hardware Auto-Detection)
-*   **CM4 的電源架構**：CM4 模組能完美響應主機板 AXP228 電源管理晶片的 10 秒
-    硬體強制斷電，因此無需軟體介入最後的斷電過程。
-*   **CM5 的電源架構**：受限於 CM5 自帶的 PMU 與轉接板線路設計，AXP228 的硬
-    體斷電無法確實關閉 CM5。若系統當機，長按電源鍵會導致設備進入綠燈恆亮的「
-    殭屍狀態」。
-*   **解決方案**：守護行程（Daemon）會在啟動時讀取 `/proc/device-tree/model`
-    。若偵測為 CM5，便會透過 I2C 指令強制寫入暫存器 `0x53` 停用 AXP228 的
-    10 秒硬體斷電機制，並將重啟任務全面交由軟體接管。CM4 則保留原本硬體機制。
+## 1. Dual-Service Architecture
 
-## 3. 零 CPU 耗損監聽 (Zero CPU Usage Monitoring)
-傳統的腳本常依賴 `sleep` 迴圈來輪詢（Polling）硬體狀態，這會導致無謂的 CPU 
-喚醒與耗電。本專案改用 `evtest` 工具對 `/dev/input/` 的 `axp221-pek` 進行阻
-塞式讀取（Blocking Read）。由於底層依賴 Linux 核心的硬體中斷（Interrupt）機
-制，當沒有按鍵按下時，整個監控程序會進入完全休眠，達到絕對的 0% CPU 耗損。
+This project solves the power button freezing issue on the ClockworkPi uConsole
+(especially with the CM5 module). To keep the system very stable, the project is
+divided into two separate background services:
 
-## 4. 漸進式防呆警告機制 (Progressive Fallback & Visual Cue)
-為了避免誤觸導致資料遺失，我們設計了階段式的觸發機制：
-1.  **按壓 0 到 5 秒**：使用者隨時可以放開按鍵，不會有任何影響。
-2.  **按壓滿 5 秒**：腳本會抓取 `/sys/class/backlight` 的節點，將螢幕亮度歸
-    零後瞬間恢復。這個「閃爍」動作會重複 3 次，提供使用者明確的視覺警告：「
-    系統即將強迫重啟，請立即鬆手」。
-3.  **按壓滿 10 秒**：
-    *   CM5 會直接在背景發送 `shutdown --halt --poweroff now` 進行軟體關機。
-    *   CM4 會退出子程序，直接讓 AXP228 執行原本的底層硬體切斷。
+1.  **Power Key Monitor (`ucs_power_key_monitor.service`)**: Handles the power
+    button hardware events, warning flashes, and safe shutdown.
+2.  **Battery Monitor (`ucs_batt_monitor.service`)**: Handles battery saving,
+    external screen detection, and CPU frequency changes.
 
-## 5. 安全恢復機制 (Safe Trap Mechanism)
-由於閃爍螢幕（調降亮度為 0）的過程需要耗時約數百毫秒。若使用者剛好在「閃爍的
-那一瞬間」放開電源鍵，計時器子程序會被強行終止。為了防止螢幕永久卡在全黑狀態
-，腳本在子程序中嚴格實作了 `trap` 攔截 `SIGTERM` 訊號，確保計時器無論何時被
-取消，都一定會強制將螢幕背光寫回按壓前的原始數值。
+Both services are designed to be lightweight and use zero CPU polling.
 
-## 6. 模組化與安全安裝 (Idempotency & Modularization)
-*   `install.sh` 具備冪等性設計，可以被安全地重複執行多次而不會破壞系統。
-*   安裝時會自動產出專屬的卸載腳本，讓使用者不需保留原始碼也能一鍵乾淨移除，
-    不會對系統留下任何無用的依賴或副作用。
+---
+
+## Part 1: Power Key Monitor
+
+### 1.1 Design Concept and 0% CPU Usage
+Old monitor tools often use a `sleep` loop to check the hardware. This wastes
+CPU power. This service uses the `evtest` tool to read the `axp221-pek` input
+directly. It waits without using the CPU. When you are not pressing the button,
+the service sleeps completely and uses 0% CPU.
+
+For the CM5 hardware, the service sends an I2C command to disable the hardware's
+default 10-second shutdown. This allows the software to take full control.
+
+### 1.2 Logic Flow Chart
+
+```text
+[ Hardware Power Button ]
+           |
+  ( Waiting, 0% CPU )
+           |
+    +------+------+
+    |             |
+[ Key DOWN ]  [ Key UP ]
+    |             |
+Start 5s timer  +-+--------------------+
+    |           | (Stop timer)         |
+    v           v                      v
+[ Run Hook ]    | < 0.05s              | > 0.05s and < 0.7s
+                v                      v
+           Invalid (Ignore)      Check cooldown time
+                                       |
+                                       v
+                                [ Run Short Press Hook ]
+```
+
+### 1.3 Warning and Safe Recovery
+To prevent data loss from accidental presses, the system has visual warnings:
+1.  **Press 0 to 5 seconds**: You can release the button anytime to cancel.
+2.  **Press for 5 seconds**: The screen will turn black and back on 3 times.
+    This means the system will force restart soon. Let go if it is a mistake.
+3.  **Press for 10-30 seconds**: The software forces a shutdown.
+
+**Safe Trap Mechanism**:
+Flashing the screen takes some time. If you release the button while it is
+flashing, the system will stop the timer. The code uses a `trap` to make sure
+the screen power is always turned back on. You will not get stuck with a black
+screen.
+
+---
+
+## Part 2: Battery and Power Saving Monitor
+
+The goal is to save battery when the power is low or the screen is off. It also
+prevents the system from slowing down unexpectedly.
+
+This service also uses zero CPU polling. It uses `udevadm` and `inotifywait` to
+listen for events.
+
+### 1. Frequency Adjustment
+
+The system listens for three events:
+*   **a. Internal screen brightness changes**
+*   **b. Charger plugged or unplugged**
+*   **c. Battery level changes**
+
+#### 1.1 When to enter Power Save
+When these rules are true, and **stay true for 5 seconds**:
+*   **a.** (Screen is off `AND` no external screen) `OR` (Battery < 30%)
+*   **b.** `AND` (Not charging)
+
+#### 1.2 When to enter Normal Mode
+When any of these rules are true, and **stay true for 5 seconds**:
+*   **a.** (Screen is on `OR` has external screen) `AND` (Battery >= 30%)
+*   **b.** `OR` (Charging)
+
+#### 1.3 Power Save Actions
+*   **1.3.1 Record Settings**: Save the current CPU max and min frequency.
+*   **1.3.2 Set to Power Save**: Change the CPU frequency to the lowest hardware
+    limit. Then run the `$HOOK_FREQ_POWERSAVE` script.
+
+#### 1.4 Normal Mode Actions
+*   **1.4.1 Check Records**: Check if there are saved frequency records.
+*   **1.4.2 Restore Settings**:
+    *   **Yes**: Restore the saved frequency.
+    *   **No**: Read the default hardware frequency and apply it.
+    *   Finally, run the `$HOOK_FREQ_RESTORE` script.
+
+### Logic Flow Chart
+
+```text
+ [ udevadm ]                [ inotifywait ]
+(Batt/Charger)             (Screen Brightness)
+       \                        /
+        +---> [ Named Pipe ] <-+
+                     |
+                     v
+             [ Read Events ]
+                     |
+                     v
+   +-----------------+-----------------+
+   |                                   |
+[ 1.1 Power Save ]               [ 1.2 Normal Mode ]
+((Screen=0 and No Ext)           ((Screen!=0 or Has Ext)
+         or                               and
+   Battery < 30%)                   Battery >= 30%)
+        and                               or
+  (Not Charging)                     (Charging)
+   |                                   |
+   +-----------------+-----------------+
+                     |
+            [ Did state change? ]
+                     | (Yes)
+             ( Start 5s timer )
+                     | (No changes for 5s)
+                     v
+   +-----------------+-----------------+
+   |                                   |
+[ 1.3 Power Save Action ]        [ 1.4 Normal Action ]
+1.3.1 Record frequency           1.4.1 Check records
+1.3.2 Set to lowest limit        1.4.2 Has records?
+                                   - Yes: Restore record
+                                   - No: Restore default
+```
+
+### 1.5 Decoupling and Testability
+To test the rules easily without real hardware, the logic is put into a pure
+function named `ucs_decide_target_state`.
+This function does not read any files. It only uses the input values (backlight,
+external screen, battery, charger) to calculate the result. You can use the CLI
+(`ucs test_logic`) to test all situations in milliseconds. This makes the system
+very strong and reliable.
+
+### 1.6 System to User Notifications
+The background services run as `root` and cannot easily talk to your desktop.
+To show desktop notifications (like in dry-run mode), the system uses a special
+method (`ucs_notify_user`). It finds your user ID and the Wayland DBUS address,
+and uses `sudo -u` to send the notification to your screen safely.
+
+---
+
+# 中文版說明 (Traditional Chinese)
+
+## 1. 雙服務架構 (Dual-Service Architecture)
+
+本專案解決了 ClockworkPi uConsole（特別是 CM5）長按電源鍵會當機的問題。為
+了讓系統非常穩定，我們將程式分成兩個獨立的背景服務：
+
+1.  **電源鍵監控 (`ucs_power_key_monitor.service`)**：處理實體按鍵、螢幕警
+    告與安全關機。
+2.  **電池監控 (`ucs_batt_monitor.service`)**：處理電池省電、外接螢幕檢查
+    與 CPU 頻率調整。
+
+兩個服務都很輕量，並且不使用 CPU 輪詢 (Zero Polling)。
+
+---
+
+## 第一部分：電源鍵監控服務
+
+### 1.1 設計概念與 0% CPU 耗損
+舊的工具通常會用 `sleep` 迴圈來檢查硬體，這會浪費 CPU 電力。本服務使用
+`evtest` 工具直接讀取硬體訊號。當你沒有按按鈕時，程式會完全休眠，使用 0%
+的 CPU。
+
+對於 CM5 硬體，服務會自動發送 I2C 指令，關閉硬體預設的 10 秒斷電功能，讓軟
+體可以完全接管。
+
+### 1.2 邏輯流程圖
+
+```text
+[ 硬體電源鍵 ]
+      |
+ ( 休眠等待，0% CPU )
+      |
+  +---+---+
+  |       |
+[ 按下 ] [ 放開 ]
+  |       |
+開始 5s計時 +----------------------+
+  |       | (停止計時)             |
+  v       v                        v
+[ 執行 ]  | < 0.05s                | > 0.05s 且 < 0.7s
+          v                        v
+      無效操作 (忽略)         檢查冷卻時間
+                                   |
+                                   v
+                             [ 執行短按 Hook ]
+```
+
+### 1.3 警告與安全恢復
+為了防止你不小心按到而遺失資料，系統有視覺警告功能：
+1.  **按壓 0 到 5 秒**：你可以隨時放開按鍵取消。
+2.  **按壓滿 5 秒**：螢幕會變黑再變亮 3 次。這表示系統快要強制重啟了，如果
+    是誤按請馬上放開。
+3.  **按壓 10 到 30 秒**：軟體會強制關機。
+
+**安全 Trap 機制**：
+讓螢幕閃爍需要一點時間。如果你在閃爍的時候放開按鍵，程式會停止計時。這裡使
+用了 `trap` 機制來確保螢幕電源一定會被重新打開，你不會遇到螢幕一直黑掉的狀
+況。
+
+---
+
+## 第二部分：電池與省電監控服務
+
+這個服務的目標是在電量低或螢幕關閉時節省電力，並且防止系統在運作時突然變慢。
+它同樣不使用 CPU 輪詢，而是透過 `udevadm` 和 `inotifywait` 來接收事件。
+
+### 1. 調整頻率
+
+系統會監控三個事件：
+*   **a. 內建螢幕亮度改變**
+*   **b. 充電線插拔**
+*   **c. 電池電量改變**
+
+#### 1.1 何時進入省電模式
+當以下規則成立，並且**維持 5 秒沒有改變**：
+*   **a.** (螢幕關閉 `AND` 沒有外接螢幕) `OR` (電量 < 30%)
+*   **b.** `AND` (沒有在充電)
+
+#### 1.2 何時回到正常模式
+當以下任何規則成立，並且**維持 5 秒沒有改變**：
+*   **a.** (螢幕開啟 `OR` 有外接螢幕) `AND` (電量 >= 30%)
+*   **b.** `OR` (正在充電)
+
+#### 1.3 省電模式動作
+*   **1.3.1 紀錄設定**：儲存目前的 CPU 最高與最低頻率。
+*   **1.3.2 設定為省電**：將 CPU 頻率限制在硬體的最低值。然後執行
+    `$HOOK_FREQ_POWERSAVE` 腳本。
+
+#### 1.4 正常模式動作
+*   **1.4.1 檢查紀錄**：檢查是否有之前儲存的頻率紀錄。
+*   **1.4.2 恢復設定**：
+    *   **有**：恢復儲存的頻率。
+    *   **沒有**：讀取硬體的預設頻率並套用。
+    *   最後，執行 `$HOOK_FREQ_RESTORE` 腳本。
+
+### 邏輯流程圖
+
+```text
+ [ udevadm ]                [ inotifywait ]
+(電池/充電器)                 (螢幕亮度)
+       \                        /
+        +---> [ Named Pipe ] <-+
+                     |
+                     v
+             [ 讀取事件 ]
+                     |
+                     v
+   +-----------------+-----------------+
+   |                                   |
+[ 1.1 省電模式 ]                 [ 1.2 正常模式 ]
+((螢幕關閉 且 無外接)            ((螢幕開啟 或 有外接)
+         或                               且
+    電量 < 30%)                      電量 >= 30%)
+         且                               或
+    (無充電)                           (充電中)
+   |                                   |
+   +-----------------+-----------------+
+                     |
+             [ 狀態有改變嗎? ]
+                     | (有)
+             ( 開始 5 秒計時 )
+                     | (5 秒內沒有改變)
+                     v
+   +-----------------+-----------------+
+   |                                   |
+[ 1.3 省電動作 ]                 [ 1.4 正常動作 ]
+1.3.1 紀錄頻率                   1.4.1 檢查紀錄
+1.3.2 設定為最低限制             1.4.2 有紀錄嗎?
+                                   - 有: 恢復紀錄
+                                   - 無: 恢復預設
+```
+
+### 1.5 程式解耦與測試
+為了解決硬體測試的困難，判斷邏輯被獨立成一個叫做 `ucs_decide_target_state`
+的純函式。這個函式不會讀取任何檔案，只會根據輸入的數值來計算結果。你可以使
+用 CLI (`ucs test_logic`) 在毫秒內測試所有的情況。這讓系統變得非常可靠。
+
+### 1.6 系統與使用者的桌面通知
+背景服務是使用 `root` 權限執行的，通常無法直接與你的桌面溝通。為了顯示桌面
+通知，系統使用了一個特別的方法 (`ucs_notify_user`)。它會找出你的使用者 ID
+與 Wayland 的 DBUS 位址，並安全地傳送通知到你的螢幕上。

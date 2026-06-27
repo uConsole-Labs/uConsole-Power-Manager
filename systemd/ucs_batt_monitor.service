@@ -1,10 +1,10 @@
 [Unit]
-Description=uConsole Long-Press Shutdown Monitor
+Description=uConsole Battery Monitor
 After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/ucs monitor
+ExecStart=/usr/local/bin/ucs monitor_battery
 Restart=always
 RestartSec=5
 User=root

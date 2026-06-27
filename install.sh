@@ -21,18 +21,27 @@ else
 fi
 
 echo "Checking dependencies..."
-if ! command -v evtest >/dev/null 2>&1 || ! command -v i2cset >/dev/null 2>&1
+if ! command -v evtest >/dev/null 2>&1 || \
+   ! command -v i2cset >/dev/null 2>&1 || \
+   ! command -v inotifywait >/dev/null 2>&1 || \
+   ! command -v notify-send >/dev/null 2>&1 || \
+   ! command -v mako >/dev/null 2>&1
 then
-  echo "Missing dependencies: evtest and/or i2c-tools."
+  echo "Missing dependencies: evtest, i2c-tools, inotify-tools,"
+  echo "mako-notifier, and/or libnotify-bin."
   read -p "Do you want to install them via apt-get now? [Y/n] " do_apt
   if [[ ! "$do_apt" =~ ^[Nn]$ ]]; then
     apt-get update
-    apt-get install evtest i2c-tools
+    apt-get install evtest i2c-tools inotify-tools mako-notifier libnotify-bin
   else
     echo "Skipping apt-get installation."
   fi
 
-  if ! command -v evtest >/dev/null 2>&1 || ! command -v i2cset >/dev/null 2>&1
+  if ! command -v evtest >/dev/null 2>&1 || \
+     ! command -v i2cset >/dev/null 2>&1 || \
+     ! command -v inotifywait >/dev/null 2>&1 || \
+     ! command -v notify-send >/dev/null 2>&1 || \
+     ! command -v mako >/dev/null 2>&1
   then
     echo "ERROR: Required dependencies are still missing."
     echo "Installation aborted."
@@ -72,8 +81,8 @@ chmod +x /etc/ucs/hooks/*.sh
 cp src/ucs-cli.sh /usr/local/bin/ucs
 chmod +x /usr/local/bin/ucs
 
-echo "Installing systemd service..."
-cp systemd/ucs.service /etc/systemd/system/
+echo "Installing systemd services..."
+cp systemd/ucs_*.service /etc/systemd/system/
 systemctl daemon-reload
 /usr/local/bin/ucs enable
 
@@ -86,7 +95,8 @@ if [ "$EUID" -ne 0 ]; then
 fi
 echo "Stopping and disabling service..."
 /usr/local/bin/ucs disable
-rm -f /etc/systemd/system/ucs.service
+rm -f /etc/systemd/system/ucs_power_key_monitor.service
+rm -f /etc/systemd/system/ucs_batt_monitor.service
 systemctl daemon-reload
 echo "Removing files..."
 rm -rf /etc/ucs
