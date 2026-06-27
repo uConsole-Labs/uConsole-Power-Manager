@@ -3,7 +3,7 @@
 ## 1. 核心設計理念 (Core Design Philosophy)
 本專案的誕生是為了解決 ClockworkPi uConsole（特別是搭載 CM5 核心模組時）所遇
 到的長按電源鍵當機問題。設計上秉持「極輕量」、「零 CPU 佔用」以及「跨硬體自
-動適配」三大原則，全面取代耗資源的 Python 輪詢腳本。
+動適配」三大原則。
 
 ## 2. 硬體架構差異與自動適配 (Hardware Auto-Detection)
 *   **CM4 的電源架構**：CM4 模組能完美響應主機板 AXP228 電源管理晶片的 10 秒
