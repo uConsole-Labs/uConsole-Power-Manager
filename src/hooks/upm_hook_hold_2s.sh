@@ -1,6 +1,6 @@
 #!/bin/bash
-echo "$(date '+%Y-%m-%d %H:%M:%S') [UCS-HOOK] 2s hold triggered." \
-  >> /var/log/ucs.log
+echo "$(date '+%Y-%m-%d %H:%M:%S') [UPM-HOOK] 2s hold triggered." \
+  >> /var/log/upm.log
 
 U=$(who | awk '$2 ~ /tty[1-7]|:[0-9]/ {print $1}' | head -1)
 if [ -n "$U" ]; then

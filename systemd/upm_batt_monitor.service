@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/ucs monitor_battery
+ExecStart=/usr/local/bin/upm monitor_battery
 Restart=always
 RestartSec=5
 User=root

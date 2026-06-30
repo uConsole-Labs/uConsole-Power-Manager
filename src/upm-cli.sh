@@ -1,19 +1,19 @@
 #!/bin/bash
 
 # Configuration and Paths
-CONF_FILE="/etc/ucs.conf"
-VERSION_FILE="/etc/ucs.version"
-SERVICE_POWER="ucs_power_key_monitor.service"
-SERVICE_BATT="ucs_batt_monitor.service"
-LOCK_FILE_POWER="/tmp/ucs_power_key.lock"
+CONF_FILE="/etc/upm.conf"
+VERSION_FILE="/etc/upm.version"
+SERVICE_POWER="upm_power_key_monitor.service"
+SERVICE_BATT="upm_batt_monitor.service"
+LOCK_FILE_POWER="/tmp/upm_power_key.lock"
 
 # Default Hook Paths (Can be overridden in conf)
-HOOK_SHORT_PRESS="/etc/ucs/hooks/ucs_hook_short_press.sh"
-HOOK_HOLD_2S="/etc/ucs/hooks/ucs_hook_hold_2s.sh"
-HOOK_HOLD_5S="/etc/ucs/hooks/ucs_hook_hold_5s.sh"
-HOOK_HOLD_10S="/etc/ucs/hooks/ucs_hook_hold_10s.sh"
-HOOK_FREQ_POWERSAVE="/etc/ucs/hooks/ucs_hook_freq_powersave.sh"
-HOOK_FREQ_RESTORE="/etc/ucs/hooks/ucs_hook_freq_restore.sh"
+HOOK_SHORT_PRESS="/etc/upm/hooks/upm_hook_short_press.sh"
+HOOK_HOLD_2S="/etc/upm/hooks/upm_hook_hold_2s.sh"
+HOOK_HOLD_5S="/etc/upm/hooks/upm_hook_hold_5s.sh"
+HOOK_HOLD_10S="/etc/upm/hooks/upm_hook_hold_10s.sh"
+HOOK_FREQ_POWERSAVE="/etc/upm/hooks/upm_hook_freq_powersave.sh"
+HOOK_FREQ_RESTORE="/etc/upm/hooks/upm_hook_freq_restore.sh"
 
 # Load Configuration
 LONG_PRESS_SEC=10
@@ -35,7 +35,7 @@ BACKLIGHT_FLASH_INTERVAL_SEC="0.5"
 BATT_FREQ_MODE_NORMAL="normal"
 BATT_FREQ_MODE_POWER_SAVE="powersave"
 
-ucs_decide_target_state() {
+upm_decide_target_state() {
   local bl_power_val="$1"
   local has_ext="$2"
   local batt_cap="$3"
@@ -68,7 +68,7 @@ log_msg() {
   if [ "$type" = "DEBUG" ] && [ "${ENABLE_DEBUG:-false}" != "true" ]; then
     return
   fi
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [UCS] [$type] $msg"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [UPM] [$type] $msg"
 }
 
 check_root() {
@@ -78,7 +78,7 @@ check_root() {
   fi
 }
 
-ucs_notify_user() {
+upm_notify_user() {
   local msg="$1"
   local user
   user=$(who | awk '{print $1}' | head -n 1)
@@ -94,44 +94,44 @@ ucs_notify_user() {
   fi
 }
 
-ucs_enable() {
+upm_enable() {
   sudo systemctl enable "$SERVICE_POWER" "$SERVICE_BATT" >/dev/null 2>&1
   log_msg "INFO" "Services enabled for auto-start."
-  log_msg "INFO" "Note: It is NOT started yet. Run 'ucs start' to run it."
+  log_msg "INFO" "Note: It is NOT started yet. Run 'upm start' to run it."
 }
 
-ucs_disable() {
+upm_disable() {
   sudo systemctl stop "$SERVICE_POWER" "$SERVICE_BATT" >/dev/null 2>&1
   sudo systemctl disable "$SERVICE_POWER" "$SERVICE_BATT" >/dev/null 2>&1
   log_msg "INFO" "Services disabled and stopped."
 }
 
-ucs_start() {
+upm_start() {
   sudo systemctl start "$SERVICE_POWER" "$SERVICE_BATT"
   log_msg "INFO" "Services started."
 }
 
-ucs_stop() {
+upm_stop() {
   sudo systemctl stop "$SERVICE_POWER" "$SERVICE_BATT"
   log_msg "INFO" "Services stopped."
 }
 
-ucs_restart() {
+upm_restart() {
   sudo systemctl restart "$SERVICE_POWER" "$SERVICE_BATT"
   log_msg "INFO" "Services restarted."
 }
 
-ucs_enable_debug_msg() {
+upm_enable_debug_msg() {
   sudo sed -i 's/^ENABLE_DEBUG=.*/ENABLE_DEBUG="true"/' "$CONF_FILE"
   log_msg "INFO" "Debug messages enabled."
 }
 
-ucs_disable_debug_msg() {
+upm_disable_debug_msg() {
   sudo sed -i 's/^ENABLE_DEBUG=.*/ENABLE_DEBUG="false"/' "$CONF_FILE"
   log_msg "INFO" "Debug messages disabled."
 }
 
-ucs_set_time() {
+upm_set_time() {
   local new_time="$1"
   if ! [[ "$new_time" =~ ^[0-9]+$ ]]; then
     log_msg "ERROR" "Invalid time format. Must be a number."
@@ -154,7 +154,7 @@ ucs_set_time() {
   fi
 }
 
-ucs_status() {
+upm_status() {
   log_msg "INFO" "Current Configuration ($CONF_FILE):"
   while read -r line; do log_msg "INFO" "  $line"; done < "$CONF_FILE"
   echo ""
@@ -162,17 +162,17 @@ ucs_status() {
   sudo systemctl status "$SERVICE_POWER" "$SERVICE_BATT" --no-pager
 }
 
-ucs_version() {
+upm_version() {
   if [ -f "$VERSION_FILE" ]; then
     local ver
     ver=$(cat "$VERSION_FILE")
-    echo "uConsole-shutdown version $ver"
+    echo "uConsole-PowerManager version $ver"
   else
-    echo "uConsole-shutdown version (unknown)"
+    echo "uConsole-PowerManager version (unknown)"
   fi
 }
 
-ucs_device_sleep_or_resume() {
+upm_device_sleep_or_resume() {
   local FB_PATH
   local BL_PATH
   FB_PATH=$(find /sys/class/graphics -name "fb0" | head -n 1)
@@ -195,7 +195,7 @@ ucs_device_sleep_or_resume() {
   fi
 }
 
-ucs_backlight_flash() {
+upm_backlight_flash() {
   local FB_PATH
   local BL_PATH
   FB_PATH=$(find /sys/class/graphics -name "fb0" 2>/dev/null | head -n 1)
@@ -243,7 +243,7 @@ ORIG_I2C_VAL=""
 TIMER_PID=""
 IS_CM5=false
 
-ucs_cleanup() {
+upm_cleanup() {
   log_msg "INFO" "Caught exit signal, running cleanup..."
   if [ -n "$TIMER_PID" ]; then
     log_msg "DEBUG" "Killing active timer subshell (PID: $TIMER_PID)"
@@ -257,7 +257,7 @@ ucs_cleanup() {
   log_msg "INFO" "Cleanup complete."
 }
 
-ucs_monitor_power_key() {
+upm_monitor_power_key() {
   local IS_DRY_RUN="${1:-false}"
 
   if [ -f "$LOCK_FILE_POWER" ]; then
@@ -265,7 +265,7 @@ ucs_monitor_power_key() {
     lock_pid=$(cat "$LOCK_FILE_POWER")
     if kill -0 "$lock_pid" 2>/dev/null; then
       log_msg "ERROR" "Monitor is already running (PID: $lock_pid)."
-      log_msg "ERROR" "Please stop the background service first (ucs stop)."
+      log_msg "ERROR" "Please stop the background service first (upm stop)."
       exit 1
     fi
   fi
@@ -279,7 +279,7 @@ ucs_monitor_power_key() {
     log_msg "INFO" "Starting monitor..."
   fi
 
-  trap 'ucs_cleanup' EXIT
+  trap 'upm_cleanup' EXIT
   trap 'exit 0' SIGINT SIGTERM
 
   local model_path="/proc/device-tree/model"
@@ -395,9 +395,9 @@ ucs_monitor_power_key() {
 }
 
 
-ucs_monitor_battery() {
+upm_monitor_battery() {
   local IS_DRY_RUN="${1:-false}"
-  local LOCK_FILE_BATT="/tmp/ucs_battery.lock"
+  local LOCK_FILE_BATT="/tmp/upm_battery.lock"
 
   if [ -f "$LOCK_FILE_BATT" ]; then
     local lock_pid
@@ -417,7 +417,7 @@ ucs_monitor_battery() {
   fi
 
   local CPU_POLICY_DIR="/sys/devices/system/cpu/cpufreq/policy0"
-  local CPU_BAK_FILE="/tmp/ucs_cpu_freq.bak"
+  local CPU_BAK_FILE="/tmp/upm_cpu_freq.bak"
 
   local CURRENT_TARGET="$BATT_FREQ_MODE_NORMAL"
   local LAST_TARGET=""
@@ -425,7 +425,7 @@ ucs_monitor_battery() {
   local LAST_BATT_LEVEL=""
   local UDEV_PID=""
   local INOTIFY_PID=""
-  local TMP_PIPE="/tmp/ucs_events_$$"
+  local TMP_PIPE="/tmp/upm_events_$$"
 
   mkfifo "$TMP_PIPE"
 
@@ -483,13 +483,13 @@ ucs_monitor_battery() {
         "[Eval] Batt changed: $LAST_BATT_LEVEL -> $batt_cap"
       for th in 50 20 10 5; do
         if [ "$LAST_BATT_LEVEL" -gt "$th" ] && [ "$batt_cap" -le "$th" ]; then
-          local hook_script="/etc/ucs/hooks/ucs_hook_batt_below_${th}.sh"
+          local hook_script="/etc/upm/hooks/upm_hook_batt_below_${th}.sh"
           if [ -f "$hook_script" ]; then
             log_msg "INFO" "Triggering hook: batt_below_${th}"
             bash "$hook_script" &
           fi
         elif [ "$LAST_BATT_LEVEL" -le "$th" ] && [ "$batt_cap" -gt "$th" ]; then
-          local hook_script="/etc/ucs/hooks/ucs_hook_batt_above_${th}.sh"
+          local hook_script="/etc/upm/hooks/upm_hook_batt_above_${th}.sh"
           if [ -f "$hook_script" ]; then
             log_msg "INFO" "Triggering hook: batt_above_${th}"
             bash "$hook_script" &
@@ -500,7 +500,7 @@ ucs_monitor_battery() {
     LAST_BATT_LEVEL="$batt_cap"
 
     local new_target
-    new_target=$(ucs_decide_target_state \
+    new_target=$(upm_decide_target_state \
       "$bl_power_val" "$has_ext" "$batt_cap" "$is_charging")
 
     if [ "$new_target" != "none" ]; then
@@ -522,9 +522,9 @@ ucs_monitor_battery() {
           if [ "$IS_DRY_RUN" = true ]; then
             log_msg "WARN" "(DRY RUN) Applying CPU state: $CURRENT_TARGET"
             if [ "$CURRENT_TARGET" = "$BATT_FREQ_MODE_POWER_SAVE" ]; then
-              ucs_notify_user "(DRY RUN) Powersave mode (CPU minimum freq)"
+              upm_notify_user "(DRY RUN) Powersave mode (CPU minimum freq)"
             elif [ "$CURRENT_TARGET" = "$BATT_FREQ_MODE_NORMAL" ]; then
-              ucs_notify_user "(DRY RUN) Normal mode (CPU dynamic freq)"
+              upm_notify_user "(DRY RUN) Normal mode (CPU dynamic freq)"
             fi
             exit 0
           fi
@@ -544,7 +544,7 @@ ucs_monitor_battery() {
               echo "$hw_min" > "$CPU_POLICY_DIR/scaling_max_freq" 2>/dev/null
             fi
             bash "$HOOK_FREQ_POWERSAVE" &
-            ucs_notify_user "Powersave mode (CPU minimum freq)"
+            upm_notify_user "Powersave mode (CPU minimum freq)"
           elif [ "$CURRENT_TARGET" = "$BATT_FREQ_MODE_NORMAL" ]; then
             log_msg "INFO" "Adjusting to restore..."
             if [ -f "$CPU_BAK_FILE" ]; then
@@ -561,7 +561,7 @@ ucs_monitor_battery() {
               fi
             fi
             bash "$HOOK_FREQ_RESTORE" &
-            ucs_notify_user "Normal mode (CPU dynamic freq)"
+            upm_notify_user "Normal mode (CPU dynamic freq)"
           fi
         ) &
         TIMER_PID=$!
@@ -592,9 +592,9 @@ ucs_monitor_battery() {
 
 print_help() {
 
-  ucs_version
+  upm_version
   echo ""
-  echo "Usage: ucs <command> [args]"
+  echo "Usage: upm <command> [args]"
   echo ""
   echo "Service Management Commands:"
   echo "  enable                  Enable auto-start on boot."
@@ -624,37 +624,37 @@ print_help() {
 }
 
 case "$1" in
-  enable) check_root; ucs_enable ;;
-  disable) check_root; ucs_disable ;;
-  start) check_root; ucs_start ;;
-  stop) check_root; ucs_stop ;;
-  restart) check_root; ucs_restart ;;
-  device_sleep_or_resume) check_root; ucs_device_sleep_or_resume ;;
-  backlight_flash) check_root; ucs_backlight_flash ;;
-  flash_test) check_root; ucs_backlight_flash ;;
-  enable_debug_msg) check_root; ucs_enable_debug_msg ;;
-  disable_debug_msg) check_root; ucs_disable_debug_msg ;;
+  enable) check_root; upm_enable ;;
+  disable) check_root; upm_disable ;;
+  start) check_root; upm_start ;;
+  stop) check_root; upm_stop ;;
+  restart) check_root; upm_restart ;;
+  device_sleep_or_resume) check_root; upm_device_sleep_or_resume ;;
+  backlight_flash) check_root; upm_backlight_flash ;;
+  flash_test) check_root; upm_backlight_flash ;;
+  enable_debug_msg) check_root; upm_enable_debug_msg ;;
+  disable_debug_msg) check_root; upm_disable_debug_msg ;;
   time)
     check_root
     if [ -z "$2" ]; then
-      log_msg "ERROR" "Missing time parameter. Usage: ucs time <seconds>"
+      log_msg "ERROR" "Missing time parameter. Usage: upm time <seconds>"
     else
-      ucs_set_time "$2"
+      upm_set_time "$2"
     fi
     ;;
-  status) ucs_status ;;
-  version) ucs_version ;;
-  monitor_power_key) check_root; ucs_monitor_power_key false ;;
-  dry_run_monitor_power_key) check_root; ucs_monitor_power_key true ;;
-  monitor_battery) check_root; ucs_monitor_battery false ;;
-  dry_run_monitor_battery) check_root; ucs_monitor_battery true ;;
-  flash_test) check_root; ucs_backlight_flash ;;
+  status) upm_status ;;
+  version) upm_version ;;
+  monitor_power_key) check_root; upm_monitor_power_key false ;;
+  dry_run_monitor_power_key) check_root; upm_monitor_power_key true ;;
+  monitor_battery) check_root; upm_monitor_battery false ;;
+  dry_run_monitor_battery) check_root; upm_monitor_battery true ;;
+  flash_test) check_root; upm_backlight_flash ;;
   test_logic)
     if [ -z "$5" ]; then
-      echo "Usage: ucs test_logic <bl_power> <has_ext> <batt_cap> <is_charging>"
+      echo "Usage: upm test_logic <bl_power> <has_ext> <batt_cap> <is_charging>"
       exit 1
     fi
-    ucs_decide_target_state "$2" "$3" "$4" "$5"
+    upm_decide_target_state "$2" "$3" "$4" "$5"
     ;;
   *) print_help ;;
 esac

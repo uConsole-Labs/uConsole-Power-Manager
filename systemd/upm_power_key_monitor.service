@@ -4,7 +4,7 @@ After=multi-user.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/ucs monitor_power_key
+ExecStart=/usr/local/bin/upm monitor_power_key
 Restart=always
 RestartSec=5
 User=root

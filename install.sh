@@ -64,49 +64,49 @@ if [ -n "$ev_dev" ]; then
   out=$(timeout 0.1 evtest --grab "$ev_dev" 2>&1)
   if [[ "$out" == *"grabbed by another process"* ]]; then
     err_msg="Input device is locked by another program (EVIOCGRAB)."
-    echo "$(date '+%Y-%m-%d %H:%M:%S') [UCS] [ERROR] $err_msg"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [UPM] [ERROR] $err_msg"
     exit 1
   fi
 fi
 
 echo "Installing files..."
 mkdir -p /etc
-cp conf/ucs.conf /etc/ucs.conf
-cp VERSION /etc/ucs.version
+cp conf/upm.conf /etc/upm.conf
+cp VERSION /etc/upm.version
 
-mkdir -p /etc/ucs/hooks
-cp src/hooks/ucs_hook_*.sh /etc/ucs/hooks/
-chmod +x /etc/ucs/hooks/*.sh
+mkdir -p /etc/upm/hooks
+cp src/hooks/upm_hook_*.sh /etc/upm/hooks/
+chmod +x /etc/upm/hooks/*.sh
 
-cp src/ucs-cli.sh /usr/local/bin/ucs
-chmod +x /usr/local/bin/ucs
+cp src/upm-cli.sh /usr/local/bin/upm
+chmod +x /usr/local/bin/upm
 
 echo "Installing systemd services..."
-cp systemd/ucs_*.service /etc/systemd/system/
+cp systemd/upm_*.service /etc/systemd/system/
 systemctl daemon-reload
-/usr/local/bin/ucs enable
+/usr/local/bin/upm enable
 
 echo "Generating uninstaller..."
-cat > /usr/local/bin/ucs-uninstall << 'EOF'
+cat > /usr/local/bin/upm-uninstall << 'EOF'
 #!/bin/bash
 if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root (sudo ucs-uninstall)"
+  echo "Please run as root (sudo upm-uninstall)"
   exit 1
 fi
 echo "Stopping and disabling service..."
-/usr/local/bin/ucs disable
-rm -f /etc/systemd/system/ucs_power_key_monitor.service
-rm -f /etc/systemd/system/ucs_batt_monitor.service
+/usr/local/bin/upm disable
+rm -f /etc/systemd/system/upm_power_key_monitor.service
+rm -f /etc/systemd/system/upm_batt_monitor.service
 systemctl daemon-reload
 echo "Removing files..."
-rm -rf /etc/ucs
-rm -f /usr/local/bin/ucs
-rm -f /etc/ucs.conf
-rm -f /etc/ucs.version
-rm -f /usr/local/bin/ucs-uninstall
+rm -rf /etc/upm
+rm -f /usr/local/bin/upm
+rm -f /etc/upm.conf
+rm -f /etc/upm.version
+rm -f /usr/local/bin/upm-uninstall
 echo "Uninstall complete."
 EOF
-chmod +x /usr/local/bin/ucs-uninstall
+chmod +x /usr/local/bin/upm-uninstall
 
 echo ""
 echo "Installation complete!"
@@ -114,7 +114,7 @@ echo "The service is enabled to auto-start on boot."
 read -p "Do you want to START the service right now? [y/N] " do_start
 if [[ "$do_start" =~ ^[Yy]$ ]]; then
   echo "Starting background service..."
-  /usr/local/bin/ucs start
+  /usr/local/bin/upm start
 else
-  echo "Service start skipped. (Start later by running 'ucs start')"
+  echo "Service start skipped. (Start later by running 'upm start')"
 fi

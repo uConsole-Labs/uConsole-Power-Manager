@@ -1,4 +1,4 @@
-# uConsole-shutdown Design and Architecture
+# uConsole-PowerManager Design and Architecture
 
 [點擊此處跳轉至中文版說明](#中文版說明-traditional-chinese)
 
@@ -8,9 +8,9 @@ This project solves the power button freezing issue on the ClockworkPi uConsole
 (especially with the CM5 module). To keep the system very stable, the project is
 divided into two separate background services:
 
-1.  **Power Key Monitor (`ucs_power_key_monitor.service`)**: Handles the power
+1.  **Power Key Monitor (`upm_power_key_monitor.service`)**: Handles the power
     button hardware events, warning flashes, and safe shutdown.
-2.  **Battery Monitor (`ucs_batt_monitor.service`)**: Handles battery saving,
+2.  **Battery Monitor (`upm_batt_monitor.service`)**: Handles battery saving,
     external screen detection, and CPU frequency changes.
 
 Both services are designed to be lightweight and use zero CPU polling.
@@ -141,16 +141,16 @@ When any of these rules are true, and **stay true for 5 seconds**:
 
 ### 1.5 Decoupling and Testability
 To test the rules easily without real hardware, the logic is put into a pure
-function named `ucs_decide_target_state`.
+function named `upm_decide_target_state`.
 This function does not read any files. It only uses the input values (backlight,
 external screen, battery, charger) to calculate the result. You can use the CLI
-(`ucs test_logic`) to test all situations in milliseconds. This makes the system
+(`upm test_logic`) to test all situations in milliseconds. This makes the system
 very strong and reliable.
 
 ### 1.6 System to User Notifications
 The background services run as `root` and cannot easily talk to your desktop.
 To show desktop notifications (like in dry-run mode), the system uses a special
-method (`ucs_notify_user`). It finds your user ID and the Wayland DBUS address,
+method (`upm_notify_user`). It finds your user ID and the Wayland DBUS address,
 and uses `sudo -u` to send the notification to your screen safely.
 
 ---
@@ -162,9 +162,9 @@ and uses `sudo -u` to send the notification to your screen safely.
 本專案解決了 ClockworkPi uConsole（特別是 CM5）長按電源鍵會當機的問題。為
 了讓系統非常穩定，我們將程式分成兩個獨立的背景服務：
 
-1.  **電源鍵監控 (`ucs_power_key_monitor.service`)**：處理實體按鍵、螢幕警
+1.  **電源鍵監控 (`upm_power_key_monitor.service`)**：處理實體按鍵、螢幕警
     告與安全關機。
-2.  **電池監控 (`ucs_batt_monitor.service`)**：處理電池省電、外接螢幕檢查
+2.  **電池監控 (`upm_batt_monitor.service`)**：處理電池省電、外接螢幕檢查
     與 CPU 頻率調整。
 
 兩個服務都很輕量，並且不使用 CPU 輪詢 (Zero Polling)。
@@ -289,11 +289,11 @@ and uses `sudo -u` to send the notification to your screen safely.
 ```
 
 ### 1.5 程式解耦與測試
-為了解決硬體測試的困難，判斷邏輯被獨立成一個叫做 `ucs_decide_target_state`
+為了解決硬體測試的困難，判斷邏輯被獨立成一個叫做 `upm_decide_target_state`
 的純函式。這個函式不會讀取任何檔案，只會根據輸入的數值來計算結果。你可以使
-用 CLI (`ucs test_logic`) 在毫秒內測試所有的情況。這讓系統變得非常可靠。
+用 CLI (`upm test_logic`) 在毫秒內測試所有的情況。這讓系統變得非常可靠。
 
 ### 1.6 系統與使用者的桌面通知
 背景服務是使用 `root` 權限執行的，通常無法直接與你的桌面溝通。為了顯示桌面
-通知，系統使用了一個特別的方法 (`ucs_notify_user`)。它會找出你的使用者 ID
+通知，系統使用了一個特別的方法 (`upm_notify_user`)。它會找出你的使用者 ID
 與 Wayland 的 DBUS 位址，並安全地傳送通知到你的螢幕上。
