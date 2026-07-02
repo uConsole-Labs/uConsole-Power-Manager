@@ -1,4 +1,4 @@
-# uConsole-PowerManager
+# uConsole-Power-Manager
 
 A lightweight, event-driven background service for ClockworkPi uConsole. It
 fixes the power button long-press freeze issue.
