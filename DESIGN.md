@@ -1,4 +1,4 @@
-# uConsole-PowerManager Design and Architecture
+# uConsole-Power-Manager Design and Architecture
 
 [點擊此處跳轉至中文版說明](#中文版說明-traditional-chinese)
 
