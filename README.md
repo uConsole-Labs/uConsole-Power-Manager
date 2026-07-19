@@ -60,7 +60,6 @@ The main configuration file is `/etc/upm.conf`.
 You can edit it with a text editor.
 
 *   **`LONG_PRESS_SEC`**: The time to hold the power button before shutdown.
-*   **Hook Paths**: You can change the file paths for the custom scripts here.
 
 > Warning: Always run `sudo upm restart` after you edit `/etc/upm.conf`.
 
@@ -157,7 +156,6 @@ If you need to fix problems, you can use these commands:
 您可以使用文字編輯器來修改它。
 
 *   **`LONG_PRESS_SEC`**：長按電源鍵觸發關機的秒數。
-*   **Hook 路徑**：您可以在這裡更改自訂腳本的檔案路徑。
 
 > 警告：修改 `/etc/upm.conf` 後，請務必執行 `sudo upm restart`。
 

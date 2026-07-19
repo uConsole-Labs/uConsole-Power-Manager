@@ -1,4 +1,5 @@
 #!/bin/bash
-# Triggered when the power button is held for exactly 5 seconds.
+# UPM Hook: upm_hook_hold_5s
+# Add your custom scripts below.
 
 /usr/local/bin/upm backlight_flash

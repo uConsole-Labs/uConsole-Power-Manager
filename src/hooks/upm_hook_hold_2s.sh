@@ -1,4 +1,6 @@
 #!/bin/bash
+# UPM Hook: upm_hook_hold_2s
+# Add your custom scripts below.
 echo "$(date '+%Y-%m-%d %H:%M:%S') [UPM-HOOK] 2s hold triggered." \
   >> /var/log/upm.log
 

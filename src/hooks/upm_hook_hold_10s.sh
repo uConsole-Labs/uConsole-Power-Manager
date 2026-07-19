@@ -1,6 +1,6 @@
 #!/bin/bash
-# upm_hook_hold_10s.sh
-# Triggered when the power button is held for exactly 10 seconds.
+# UPM Hook: upm_hook_hold_10s
+# Add your custom scripts below.
 # Software shutdown fallback for CM5.
 
 echo "$(date '+%Y-%m-%d %H:%M:%S') [UPM-HOOK] 10s hold! Shutting down." \

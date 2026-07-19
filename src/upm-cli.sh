@@ -1,28 +1,33 @@
 #!/bin/bash
+# CLI tool and core logic for UPM features.
 
-# Configuration and Paths
-FILE_PATH_CONF="/etc/upm.conf"
-FILE_PATH_VERSION="/etc/upm.version"
-SERVICE_POWER="upm_power_key_monitor.service"
-SERVICE_BATT="upm_batt_monitor.service"
-FILE_PATH_POWER_KEY_LOCK="/run/upm/upm_power_key.lock"
-FILE_PATH_BATTERY_LOCK="/run/upm/upm_battery.lock"
-DIR_PATH_CPU_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
-FILE_PATH_CPU_FREQ_BACKUP="/run/upm/upm_cpu_freq.bak"
+# --- 1. Configuration and Paths ---
+readonly FILE_PATH_CONF="/etc/upm.conf"
+readonly FILE_PATH_VERSION="/etc/upm.version"
+readonly SERVICE_POWER="upm_power_key_monitor.service"
+readonly SERVICE_BATT="upm_batt_monitor.service"
+readonly FILE_PATH_POWER_KEY_LOCK="/run/upm/upm_power_key.lock"
+readonly FILE_PATH_BATTERY_LOCK="/run/upm/upm_battery.lock"
+readonly DIR_PATH_CPU_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
+readonly FILE_PATH_CPU_FREQ_BACKUP="/run/upm/upm_cpu_freq.bak"
 
-# Default Hook Paths (Can be overridden in conf)
-HOOK_SHORT_PRESS="/etc/upm/hooks/upm_hook_short_press.sh"
-HOOK_HOLD_2S="/etc/upm/hooks/upm_hook_hold_2s.sh"
-HOOK_HOLD_5S="/etc/upm/hooks/upm_hook_hold_5s.sh"
-HOOK_HOLD_10S="/etc/upm/hooks/upm_hook_hold_10s.sh"
-HOOK_FREQ_POWERSAVE="/etc/upm/hooks/upm_hook_freq_powersave.sh"
-HOOK_FREQ_RESTORE="/etc/upm/hooks/upm_hook_freq_restore.sh"
+# --- 2. Hook Paths ---
+readonly HOOK_SHORT_PRESS="/etc/upm/hooks/upm_hook_short_press.sh"
+readonly HOOK_HOLD_2S="/etc/upm/hooks/upm_hook_hold_2s.sh"
+readonly HOOK_HOLD_5S="/etc/upm/hooks/upm_hook_hold_5s.sh"
+readonly HOOK_HOLD_10S="/etc/upm/hooks/upm_hook_hold_10s.sh"
+readonly HOOK_FREQ_POWERSAVE="/etc/upm/hooks/upm_hook_freq_powersave.sh"
+readonly HOOK_FREQ_RESTORE="/etc/upm/hooks/upm_hook_freq_restore.sh"
+
+# --- 3. Timing & Modes ---
 
 # Interval for the 5-second power key warning backlight flash
-BACKLIGHT_FLASH_INTERVAL_SEC="0.5"
+readonly BACKLIGHT_FLASH_INTERVAL_SEC="0.5"
 
-BATT_FREQ_MODE_NORMAL="normal"
-BATT_FREQ_MODE_POWER_SAVE="powersave"
+readonly BATT_FREQ_MODE_NORMAL="normal"
+readonly BATT_FREQ_MODE_POWER_SAVE="powersave"
+
+# --- 4. Mutable Globals & Init ---
 
 # Global variables for cleanup
 ORIG_I2C_VAL=""
@@ -37,6 +42,12 @@ BATT_FIFO_PATH=""
 SYS_PATH_BACKLIGHT=""
 SYS_PATH_FB0=""
 SYS_PATH_BATT=""
+
+
+################################################################################
+# 1. Basic Utilities
+################################################################################
+
 
 # ==============================================================================
 # upm_decide_target_state
@@ -89,7 +100,7 @@ upm_decide_target_state() {
 # Logs a message to stdout with timestamp and type.
 #
 # Globals:
-#   ENABLE_DEBUG
+#   UPM_ENABLE_DEBUG
 # Arguments:
 #   type: The log level (e.g., INFO, WARN, ERROR, DEBUG).
 #   msg: The message to log.
@@ -101,7 +112,7 @@ upm_decide_target_state() {
 log_msg() {
   local type="$1"
   local msg="$2"
-  if [ "$type" = "DEBUG" ] && [ "${ENABLE_DEBUG:-false}" != "true" ]; then
+  if [ "$type" = "DEBUG" ] && [ "${UPM_ENABLE_DEBUG:-false}" != "true" ]; then
     return
   fi
   echo "$(date '+%Y-%m-%d %H:%M:%S') [UPM] [$type] $msg"
@@ -158,7 +169,7 @@ upm_kill_timer_safely() {
 
 
 # ==============================================================================
-# get_backlight_path
+# _get_backlight_path
 #
 # Retrieves and caches the path to the backlight device.
 #
@@ -171,7 +182,7 @@ upm_kill_timer_safely() {
 # Returns:
 #   0 on success.
 # ==============================================================================
-get_backlight_path() {
+_get_backlight_path() {
   if [ -z "$SYS_PATH_BACKLIGHT" ] || [ ! -d "$SYS_PATH_BACKLIGHT" ]; then
     SYS_PATH_BACKLIGHT=$(find /sys/class/backlight -maxdepth 1 -mindepth 1 \
       2>/dev/null | head -n 1)
@@ -180,7 +191,7 @@ get_backlight_path() {
 
 
 # ==============================================================================
-# get_fb_path
+# _get_fb_path
 #
 # Retrieves and caches the path to the framebuffer device.
 #
@@ -193,7 +204,7 @@ get_backlight_path() {
 # Returns:
 #   0 on success.
 # ==============================================================================
-get_fb_path() {
+_get_fb_path() {
   if [ -z "$SYS_PATH_FB0" ] || [ ! -d "$SYS_PATH_FB0" ]; then
     SYS_PATH_FB0=$(find /sys/class/graphics -name "fb0" 2>/dev/null | head -n 1)
   fi
@@ -201,7 +212,7 @@ get_fb_path() {
 
 
 # ==============================================================================
-# get_batt_path
+# _get_batt_path
 #
 # Retrieves and caches the path to the battery power supply device.
 #
@@ -214,7 +225,7 @@ get_fb_path() {
 # Returns:
 #   0 on success.
 # ==============================================================================
-get_batt_path() {
+_get_batt_path() {
   if [ -z "$SYS_PATH_BATT" ] || [ ! -d "$SYS_PATH_BATT" ]; then
     SYS_PATH_BATT="/sys/class/power_supply/axp20x-battery"
     if [ ! -d "$SYS_PATH_BATT" ]; then
@@ -253,6 +264,12 @@ upm_notify_user() {
       notify-send -a "uConsole" "System Performance" "$msg" 2>/dev/null &
   fi
 }
+
+
+################################################################################
+# 2. Service Management
+################################################################################
+
 
 # ==============================================================================
 # upm_enable
@@ -371,7 +388,7 @@ upm_restart() {
 #   0 on success.
 # ==============================================================================
 upm_enable_debug_msg() {
-  sudo sed -i 's/^ENABLE_DEBUG=.*/ENABLE_DEBUG="true"/' "$FILE_PATH_CONF"
+  sudo sed -i 's/^UPM_ENABLE_DEBUG=.*/UPM_ENABLE_DEBUG="true"/' "$FILE_PATH_CONF"
   log_msg "INFO" "Debug messages enabled."
 }
 
@@ -390,9 +407,15 @@ upm_enable_debug_msg() {
 #   0 on success.
 # ==============================================================================
 upm_disable_debug_msg() {
-  sudo sed -i 's/^ENABLE_DEBUG=.*/ENABLE_DEBUG="false"/' "$FILE_PATH_CONF"
+  sudo sed -i 's/^UPM_ENABLE_DEBUG=.*/UPM_ENABLE_DEBUG="false"/' "$FILE_PATH_CONF"
   log_msg "INFO" "Debug messages disabled."
 }
+
+
+################################################################################
+# 3. Configuration Commands
+################################################################################
+
 
 # ==============================================================================
 # upm_set_time
@@ -423,7 +446,7 @@ upm_set_time() {
     log_msg "WARN" "Maximum time is 30 seconds. Setting to 30."
     new_time=30
   fi
-  sudo sed -i "s/^LONG_PRESS_SEC=.*/LONG_PRESS_SEC=$new_time/" "$FILE_PATH_CONF"
+  sudo sed -i "s/^UPM_LONG_PRESS_SEC=.*/UPM_LONG_PRESS_SEC=$new_time/" "$FILE_PATH_CONF"
   log_msg "INFO" "Long press time set to $new_time seconds."
 
   if sudo systemctl is-active --quiet "$SERVICE_POWER" || \
@@ -481,6 +504,12 @@ upm_version() {
   fi
 }
 
+
+################################################################################
+# 4. Device Control
+################################################################################
+
+
 # ==============================================================================
 # upm_device_sleep_or_resume
 #
@@ -498,9 +527,9 @@ upm_version() {
 upm_device_sleep_or_resume() {
   local FB_PATH
   local BL_PATH
-  get_fb_path
+  _get_fb_path
   FB_PATH="$SYS_PATH_FB0"
-  get_backlight_path
+  _get_backlight_path
   BL_PATH="$SYS_PATH_BACKLIGHT"
 
   if [ -n "$BL_PATH" ] && [ -n "$FB_PATH" ]; then
@@ -537,9 +566,9 @@ upm_device_sleep_or_resume() {
 upm_backlight_flash() {
   local FB_PATH
   local BL_PATH
-  get_fb_path
+  _get_fb_path
   FB_PATH="$SYS_PATH_FB0"
-  get_backlight_path
+  _get_backlight_path
   BL_PATH="$SYS_PATH_BACKLIGHT"
 
   if [ -z "$BL_PATH" ] || [ -z "$FB_PATH" ]; then
@@ -577,6 +606,12 @@ upm_backlight_flash() {
   echo "$orig_fb" > "$FB_PATH/blank" 2>/dev/null
   echo "$orig_bl" > "$BL_PATH/bl_power" 2>/dev/null
 }
+
+
+################################################################################
+# 5. Cleanup & Traps
+################################################################################
+
 
 # ==============================================================================
 # upm_power_key_cleanup
@@ -645,6 +680,12 @@ upm_batt_cleanup() {
   log_msg "INFO" "Battery monitor cleanup complete."
 }
 
+
+################################################################################
+# 6. Event Monitors
+################################################################################
+
+
 # ==============================================================================
 # upm_monitor_power_key
 #
@@ -652,10 +693,10 @@ upm_batt_cleanup() {
 #
 # Globals:
 #   FILE_PATH_POWER_KEY_LOCK
-#   ENABLE_DEBUG
+#   UPM_ENABLE_DEBUG
 #   IS_CM5
 #   ORIG_I2C_VAL
-#   LONG_PRESS_SEC
+#   UPM_LONG_PRESS_SEC
 #   TIMER_PID
 # Arguments:
 #   IS_DRY_RUN: True to simulate events without shutting down.
@@ -682,7 +723,7 @@ upm_monitor_power_key() {
   echo $$ > "$FILE_PATH_POWER_KEY_LOCK"
 
   if [ "$is_dry_run" = true ]; then
-    ENABLE_DEBUG="true"
+    UPM_ENABLE_DEBUG="true"
     log_msg "WARN" "=== DRY RUN MODE ENABLED ==="
     log_msg "WARN" "System will NOT actually shut down."
   else
@@ -770,11 +811,11 @@ upm_monitor_power_key() {
           bash "$HOOK_HOLD_5S" &
         fi
 
-        local remaining=$((LONG_PRESS_SEC - 5))
+        local remaining=$((UPM_LONG_PRESS_SEC - 5))
         log_msg "INFO" "[Timer] Waiting remaining $remaining seconds..."
         sleep $remaining
 
-        log_msg "DEBUG" "[Timer] ${LONG_PRESS_SEC}s reached!"
+        log_msg "DEBUG" "[Timer] ${UPM_LONG_PRESS_SEC}s reached!"
         if [ "$is_dry_run" = true ]; then
           log_msg "WARN" "(DRY RUN) Mocking shutdown!"
         else
@@ -839,7 +880,7 @@ upm_monitor_power_key() {
 upm_read_hardware_sensors() {
   HW_BL_POWER="0"
   local bl_path
-  get_backlight_path
+  _get_backlight_path
   bl_path="$SYS_PATH_BACKLIGHT"
   if [ -n "$bl_path" ] && [ -f "$bl_path/bl_power" ]; then
     HW_BL_POWER=$(cat "$bl_path/bl_power" 2>/dev/null || echo "0")
@@ -858,7 +899,7 @@ upm_read_hardware_sensors() {
   HW_BATT_CAP="100"
   local batt_status="Discharging"
   local batt_path
-  get_batt_path
+  _get_batt_path
   batt_path="$SYS_PATH_BATT"
   if [ -n "$batt_path" ] && [ -f "$batt_path/capacity" ]; then
     HW_BATT_CAP=$(cat "$batt_path/capacity" 2>/dev/null || echo "100")
@@ -1042,7 +1083,7 @@ upm_apply_system_state() {
   (
     # Debounce: Wait before applying to prevent thrashing from rapid
     # state changes (e.g. plugging/unplugging).
-    local d_sec="$BATT_STATE_DEBOUNCE_SEC"
+    local d_sec="$UPM_BATT_STATE_DEBOUNCE_SEC"
     log_msg "INFO" "[Debounce] Delaying state ($target) for ${d_sec}s..."
     sleep "$d_sec"
     log_msg "DEBUG" "[Debounce] Delay completed. Applying state."
@@ -1073,7 +1114,7 @@ upm_apply_system_state() {
 #
 # Globals:
 #   BATT_FREQ_MODE_NORMAL
-#   ENABLE_DEBUG
+#   UPM_ENABLE_DEBUG
 #   FILE_PATH_BATTERY_LOCK
 # Arguments:
 #   $1 - is_dry_run: True to simulate CPU frequency adjustments.
@@ -1099,7 +1140,7 @@ upm_monitor_battery() {
   echo $$ > "$FILE_PATH_BATTERY_LOCK"
 
   if [ "$is_dry_run" = true ]; then
-    ENABLE_DEBUG="true"
+    UPM_ENABLE_DEBUG="true"
     log_msg "WARN" "=== DRY RUN MODE ENABLED (Battery Monitor) ==="
   else
     log_msg "INFO" "Starting battery monitor..."
@@ -1138,7 +1179,7 @@ upm_monitor_battery() {
   BATT_UDEV_PID=$!
 
   local bl_path
-  get_backlight_path
+  _get_backlight_path
   bl_path="$SYS_PATH_BACKLIGHT"
   if [ -n "$bl_path" ] && command -v inotifywait >/dev/null 2>&1; then
     inotifywait -m -e modify "$bl_path/bl_power" > "$BATT_FIFO_PATH" 2>/dev/null &
@@ -1161,6 +1202,12 @@ upm_monitor_battery() {
   log_msg "ERROR" "Battery monitor loop unexpectedly closed (EOF). Exiting..."
   exit 1
 }
+
+
+################################################################################
+# 7. CLI & Main Entrypoint
+################################################################################
+
 
 # ==============================================================================
 # print_help
@@ -1216,7 +1263,7 @@ print_help() {
 #
 # Globals:
 #   FILE_PATH_CONF
-#   LONG_PRESS_SEC
+#   UPM_LONG_PRESS_SEC
 # Arguments:
 #   $@ - All arguments passed to the script.
 # Outputs:
@@ -1226,26 +1273,31 @@ print_help() {
 # ==============================================================================
 main() {
   # Load Configuration
-  LONG_PRESS_SEC=10
-  BATT_STATE_DEBOUNCE_SEC=5
+  UPM_LONG_PRESS_SEC=10
+  UPM_BATT_STATE_DEBOUNCE_SEC=5
   if [ -f "$FILE_PATH_CONF" ]; then
     # shellcheck disable=SC1090
     source "$FILE_PATH_CONF"
+
+    # Backward compatibility for old configs
+    UPM_ENABLE_DEBUG="${UPM_ENABLE_DEBUG:-${ENABLE_DEBUG:-}}"
+    UPM_LONG_PRESS_SEC="${UPM_LONG_PRESS_SEC:-${LONG_PRESS_SEC:-}}"
+    UPM_BATT_STATE_DEBOUNCE_SEC="${UPM_BATT_STATE_DEBOUNCE_SEC:-${BATT_STATE_DEBOUNCE_SEC:-}}"
   fi
 
-  if ! [[ "$LONG_PRESS_SEC" =~ ^[0-9]+$ ]]; then
-    LONG_PRESS_SEC=10
-  elif [ "$LONG_PRESS_SEC" -lt 10 ]; then
-    LONG_PRESS_SEC=10
-  elif [ "$LONG_PRESS_SEC" -gt 30 ]; then
-    LONG_PRESS_SEC=30
+  if ! [[ "$UPM_LONG_PRESS_SEC" =~ ^[0-9]+$ ]]; then
+    UPM_LONG_PRESS_SEC=10
+  elif [ "$UPM_LONG_PRESS_SEC" -lt 10 ]; then
+    UPM_LONG_PRESS_SEC=10
+  elif [ "$UPM_LONG_PRESS_SEC" -gt 30 ]; then
+    UPM_LONG_PRESS_SEC=30
   fi
 
-  if ! [[ "$BATT_STATE_DEBOUNCE_SEC" =~ ^[0-9]+$ ]]; then
-    BATT_STATE_DEBOUNCE_SEC=5
-  elif [ "$BATT_STATE_DEBOUNCE_SEC" -lt 1 ] || \
-       [ "$BATT_STATE_DEBOUNCE_SEC" -gt 60 ]; then
-    BATT_STATE_DEBOUNCE_SEC=5
+  if ! [[ "$UPM_BATT_STATE_DEBOUNCE_SEC" =~ ^[0-9]+$ ]]; then
+    UPM_BATT_STATE_DEBOUNCE_SEC=5
+  elif [ "$UPM_BATT_STATE_DEBOUNCE_SEC" -lt 1 ] || \
+       [ "$UPM_BATT_STATE_DEBOUNCE_SEC" -gt 60 ]; then
+    UPM_BATT_STATE_DEBOUNCE_SEC=5
   fi
 
   case "$1" in

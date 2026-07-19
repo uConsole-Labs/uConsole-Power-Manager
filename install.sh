@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# UPM Installer.
+
 # Ensure running as root
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root (sudo bash install.sh)"

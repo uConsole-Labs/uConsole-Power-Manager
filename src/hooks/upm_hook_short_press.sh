@@ -1,5 +1,5 @@
 #!/bin/bash
-# Triggered on a short press (< 0.7s) of the power button.
-# Debounced to prevent continuous triggers under 1.0s.
+# UPM Hook: upm_hook_short_press
+# Add your custom scripts below.
 
 /usr/local/bin/upm device_sleep_or_resume
