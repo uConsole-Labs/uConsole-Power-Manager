@@ -127,6 +127,37 @@ check_device_locks() {
   echo "Service stopped and lock released. Continuing installation."
 }
 
+# ==============================================================================
+# install_polkit_rules
+#
+# Creates a Polkit rule to allow the desktop user to execute system power-off
+# and reboot commands without password authentication.
+#
+# Globals:
+#   SUDO_USER
+# Arguments:
+#   None
+# Outputs:
+#   Writes status to stdout. Creates a Polkit rule file.
+# Returns:
+#   0 on success.
+# ==============================================================================
+install_polkit_rules() {
+  echo "Installing Polkit rules..."
+  if [ -n "$SUDO_USER" ]; then
+    cat > /etc/polkit-1/rules.d/99-upm-pishutdown.rules << EOF
+polkit.addRule(function(action, subject) {
+    if (action.id.indexOf("org.freedesktop.login1.power-off") == 0 ||
+        action.id.indexOf("org.freedesktop.login1.reboot") == 0) {
+        if (subject.user == "${SUDO_USER}") {
+            return polkit.Result.YES;
+        }
+    }
+});
+EOF
+  fi
+}
+
 install_files() {
   echo "Installing files..."
   mkdir -p /etc/upm
@@ -178,10 +209,20 @@ if [ -n "$SUDO_USER" ]; then
   USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
   rm -f "$USER_HOME/.local/fakebin/grep"
 fi
+rm -f /etc/polkit-1/rules.d/99-upm-pishutdown.rules
 rm -f /usr/local/bin/upm-uninstall
 echo "Uninstall complete."
 EOF
   chmod +x /usr/local/bin/upm-uninstall
+}
+
+install_usm() {
+  echo "Installing USM helper..."
+  if [ -n "$SUDO_USER" ]; then
+    sudo -u "$SUDO_USER" bash install_usm.sh
+  else
+    echo "Skipping USM installation: Not running via sudo (no SUDO_USER found)."
+  fi
 }
 
 prompt_start() {
@@ -202,7 +243,9 @@ check_root
 check_hardware
 check_dependencies
 check_device_locks
+install_polkit_rules
 install_files
 install_services
 generate_uninstaller
+install_usm
 prompt_start
