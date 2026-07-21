@@ -1,0 +1,5 @@
+#!/bin/bash
+if [[ "$*" == *"-q Human Interface Device.*Keyboard"* ]]; then
+    exit 0
+fi
+exec /bin/grep "$@"

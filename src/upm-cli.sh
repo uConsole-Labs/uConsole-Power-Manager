@@ -2,8 +2,8 @@
 # CLI tool and core logic for UPM features.
 
 # --- 1. Configuration and Paths ---
-readonly FILE_PATH_CONF="/etc/upm.conf"
-readonly FILE_PATH_VERSION="/etc/upm.version"
+readonly FILE_PATH_CONF="/etc/upm/upm.conf"
+readonly FILE_PATH_VERSION="/opt/upm/upm.version"
 readonly SERVICE_POWER="upm_power_key_monitor.service"
 readonly SERVICE_BATT="upm_batt_monitor.service"
 readonly FILE_PATH_POWER_KEY_LOCK="/run/upm/upm_power_key.lock"
@@ -12,12 +12,12 @@ readonly DIR_PATH_CPU_POLICY="/sys/devices/system/cpu/cpufreq/policy0"
 readonly FILE_PATH_CPU_FREQ_BACKUP="/run/upm/upm_cpu_freq.bak"
 
 # --- 2. Hook Paths ---
-readonly HOOK_SHORT_PRESS="/etc/upm/hooks/upm_hook_short_press.sh"
-readonly HOOK_HOLD_2S="/etc/upm/hooks/upm_hook_hold_2s.sh"
-readonly HOOK_HOLD_5S="/etc/upm/hooks/upm_hook_hold_5s.sh"
-readonly HOOK_HOLD_10S="/etc/upm/hooks/upm_hook_hold_10s.sh"
-readonly HOOK_FREQ_POWERSAVE="/etc/upm/hooks/upm_hook_freq_powersave.sh"
-readonly HOOK_FREQ_RESTORE="/etc/upm/hooks/upm_hook_freq_restore.sh"
+readonly HOOK_SHORT_PRESS="/opt/upm/hooks/upm_hook_short_press.sh"
+readonly HOOK_HOLD_2S="/opt/upm/hooks/upm_hook_hold_2s.sh"
+readonly HOOK_HOLD_5S="/opt/upm/hooks/upm_hook_hold_5s.sh"
+readonly HOOK_HOLD_10S="/opt/upm/hooks/upm_hook_hold_10s.sh"
+readonly HOOK_FREQ_POWERSAVE="/opt/upm/hooks/upm_hook_freq_powersave.sh"
+readonly HOOK_FREQ_RESTORE="/opt/upm/hooks/upm_hook_freq_restore.sh"
 
 # --- 3. Timing & Modes ---
 
@@ -936,13 +936,13 @@ upm_check_and_fire_battery_hooks() {
     log_msg "DEBUG" "[Eval] Batt changed: $LAST_BATT_LEVEL -> $HW_BATT_CAP"
     for th in 50 20 10 5; do
       if [ "$LAST_BATT_LEVEL" -gt "$th" ] && [ "$HW_BATT_CAP" -le "$th" ]; then
-        local hook_script="/etc/upm/hooks/upm_hook_batt_below_${th}.sh"
+        local hook_script="/opt/upm/hooks/upm_hook_batt_below_${th}.sh"
         if [ -f "$hook_script" ]; then
           log_msg "INFO" "Triggering hook: batt_below_${th}"
           bash "$hook_script" &
         fi
       elif [ "$LAST_BATT_LEVEL" -le "$th" ] && [ "$HW_BATT_CAP" -gt "$th" ]; then
-        local hook_script="/etc/upm/hooks/upm_hook_batt_above_${th}.sh"
+        local hook_script="/opt/upm/hooks/upm_hook_batt_above_${th}.sh"
         if [ -f "$hook_script" ]; then
           log_msg "INFO" "Triggering hook: batt_above_${th}"
           bash "$hook_script" &
