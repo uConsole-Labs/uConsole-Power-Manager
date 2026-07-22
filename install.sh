@@ -219,7 +219,11 @@ EOF
 install_usm() {
   echo "Installing USM helper..."
   if [ -n "$SUDO_USER" ]; then
-    sudo -u "$SUDO_USER" bash install_usm.sh
+    local target_uid=$(id -u "$SUDO_USER")
+    sudo -u "$SUDO_USER" \
+      XDG_RUNTIME_DIR="/run/user/$target_uid" \
+      DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$target_uid/bus" \
+      bash install_usm.sh
   else
     echo "Skipping USM installation: Not running via sudo (no SUDO_USER found)."
   fi
